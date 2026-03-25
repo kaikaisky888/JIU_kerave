@@ -1,0 +1,13 @@
+.github/
+.vscode/
+runtime/
+backup/
+public/upload/
+node_modules/
+
+# Large local database dumps are kept outside Git.
+curve_1.sql
+curve_2.sql
+
+# Local logs
+*.log
