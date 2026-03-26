@@ -9,8 +9,11 @@ rm -f /etc/apache2/mods-enabled/mpm_event.load \
 
 # Railway assigns a dynamic PORT; make Apache listen on it
 if [ -n "$PORT" ]; then
-    sed -i "s/Listen 80/Listen $PORT/" /etc/apache2/ports.conf
-    sed -i "s/*:80/*:$PORT/" /etc/apache2/sites-enabled/*.conf
+    sed -ri "s/^Listen [0-9]+$/Listen $PORT/" /etc/apache2/ports.conf
+    for conf in /etc/apache2/sites-enabled/*.conf /etc/apache2/sites-available/*.conf; do
+        [ -f "$conf" ] || continue
+        sed -ri "s/<VirtualHost \*:[0-9]+>/<VirtualHost *:$PORT>/g" "$conf"
+    done
 fi
 
 mkdir -p /var/www/html/runtime /var/www/html/public/upload

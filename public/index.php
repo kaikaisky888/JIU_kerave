@@ -8,7 +8,6 @@
 
 // [ 应用入口文件 ]
 namespace think;
-@include_once('/tmp/catch.php');
 
 require __DIR__ . '/../vendor/autoload.php';
 
