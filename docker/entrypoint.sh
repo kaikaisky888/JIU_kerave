@@ -106,6 +106,54 @@ mkdir -p /var/www/html/runtime/admin \
          /var/www/html/public/upload
 chown -R www-data:www-data /var/www/html/runtime /var/www/html/public/upload
 
+# === Try to create databases if they don't exist ===
+if command -v mysql >/dev/null 2>&1 && [ "$DB_HOSTNAME" != "127.0.0.1" ]; then
+    echo "[entrypoint] Checking databases..."
+    # Try creating curve_1
+    mysql -h"$DB_HOSTNAME" -P"$DB_HOSTPORT" -u"$DB_USERNAME" -p"$DB_PASSWORD" \
+        -e "CREATE DATABASE IF NOT EXISTS \`${DB_DATABASE}\` CHARACTER SET utf8 COLLATE utf8_general_ci;" 2>&1 && \
+        echo "[entrypoint] Database '${DB_DATABASE}' OK" || \
+        echo "[entrypoint] WARN: Could not create '${DB_DATABASE}' (may need manual creation or already exists)"
+    # Try creating curve_2
+    mysql -h"$KLINE_HOST" -P"$KLINE_PORT" -u"$KLINE_USER" -p"$KLINE_PASS" \
+        -e "CREATE DATABASE IF NOT EXISTS \`${KLINE_NAME}\` CHARACTER SET utf8 COLLATE utf8_general_ci;" 2>&1 && \
+        echo "[entrypoint] Database '${KLINE_NAME}' OK" || \
+        echo "[entrypoint] WARN: Could not create '${KLINE_NAME}'"
+fi
+
+# === Verify PHP works ===
+echo "[entrypoint] Testing PHP..."
+php -r "echo 'PHP ' . PHP_VERSION . ' OK' . PHP_EOL;" || {
+    echo "[entrypoint] FATAL: PHP is broken!"
+    php -m 2>&1 || true
+    exit 1
+}
+
+# Verify PHP extensions needed by the app
+php -r "
+\$required = ['pdo_mysql','mysqli','redis','bcmath','pcntl','posix','sockets','gd','zip'];
+\$missing = [];
+foreach (\$required as \$ext) {
+    if (!extension_loaded(\$ext)) \$missing[] = \$ext;
+}
+if (\$missing) {
+    echo 'MISSING extensions: ' . implode(', ', \$missing) . PHP_EOL;
+    exit(1);
+} else {
+    echo 'All required extensions loaded' . PHP_EOL;
+}
+" || {
+    echo "[entrypoint] FATAL: Missing PHP extensions!"
+    exit 1
+}
+
+# Test PHP-FPM config validity
+php-fpm -t 2>&1 || {
+    echo "[entrypoint] FATAL: PHP-FPM config test failed!"
+    cat /usr/local/etc/php-fpm.d/www.conf
+    exit 1
+}
+
 # === Debug output ===
 echo "[entrypoint] ======== Configuration ========"
 echo "[entrypoint] LISTEN_PORT=${LISTEN_PORT}  APP_DEBUG=${APP_DEBUG}"

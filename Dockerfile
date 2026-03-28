@@ -55,8 +55,8 @@ RUN sed -i 's/;clear_env = no/clear_env = no/' /usr/local/etc/php-fpm.d/www.conf
     && sed -i 's/pm.min_spare_servers = 1/pm.min_spare_servers = 2/' /usr/local/etc/php-fpm.d/www.conf \
     && sed -i 's/pm.max_spare_servers = 3/pm.max_spare_servers = 8/' /usr/local/etc/php-fpm.d/www.conf
 
-# 安装 envsubst (gettext)
-RUN apk add --no-cache gettext
+# 安装 envsubst (gettext) and mysql-client for DB init
+RUN apk add --no-cache gettext mysql-client
 
 # 配置 Nginx
 COPY docker/nginx.conf /etc/nginx/nginx.conf
