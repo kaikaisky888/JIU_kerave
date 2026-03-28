@@ -42,38 +42,49 @@ try {
 
     if ($action === 'setup') {
         $checks['setup'] = [];
+        $force = isset($_GET['force']);
 
         // Create curve_1
+        if ($force) {
+            $pdo->exec("DROP DATABASE IF EXISTS `{$db1}`");
+            $checks['setup']['drop_curve_1'] = 'OK';
+        }
         $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$db1}` CHARACTER SET utf8 COLLATE utf8_general_ci");
         $checks['setup']['create_curve_1'] = 'OK';
 
-        // Import curve_1.sql if empty
+        // Import curve_1.sql if empty or forced
         $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ?");
         $stmt->execute([$db1]);
         $tableCount = (int)$stmt->fetchColumn();
-        if ($tableCount === 0) {
+        if ($tableCount === 0 || $force) {
             $sqlFile = dirname(__DIR__) . '/curve_1.sql';
             if (file_exists($sqlFile)) {
                 set_time_limit(600);
                 $pdo->exec("USE `{$db1}`");
                 $pdo->exec("SET NAMES utf8");
                 $sql = file_get_contents($sqlFile);
-                // Add ROW_FORMAT=DYNAMIC to all CREATE TABLE statements
                 $sql = preg_replace('/ENGINE\s*=\s*InnoDB/i', 'ENGINE=InnoDB ROW_FORMAT=DYNAMIC', $sql);
                 $pdo->exec($sql);
-                $checks['setup']['import_curve_1'] = 'OK';
+                // Verify table count
+                $stmt->execute([$db1]);
+                $newCount = (int)$stmt->fetchColumn();
+                $checks['setup']['import_curve_1'] = "OK ({$newCount} tables)";
             } else {
                 $checks['setup']['import_curve_1'] = 'file not found';
             }
         } else {
-            $checks['setup']['import_curve_1'] = "skipped ({$tableCount} tables exist)";
+            $checks['setup']['import_curve_1'] = "skipped ({$tableCount} tables exist). Use ?setup&force to reimport";
         }
 
         // Create curve_2
+        if ($force) {
+            $pdo->exec("DROP DATABASE IF EXISTS `{$db2}`");
+            $checks['setup']['drop_curve_2'] = 'OK';
+        }
         $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$db2}` CHARACTER SET utf8 COLLATE utf8_general_ci");
         $checks['setup']['create_curve_2'] = 'OK';
 
-        // Import curve_2.sql if empty
+        // Import curve_2.sql if empty or forced
         $stmt->execute([$db2]);
         $tableCount = (int)$stmt->fetchColumn();
         if ($tableCount === 0) {
