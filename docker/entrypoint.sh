@@ -107,19 +107,56 @@ mkdir -p /var/www/html/runtime/admin \
          /var/www/html/public/upload
 chown -R www-data:www-data /var/www/html/runtime /var/www/html/public/upload
 
-# === Try to create databases if they don't exist ===
+# === Auto-create and import databases ===
 if command -v mysql >/dev/null 2>&1 && [ "$DB_HOSTNAME" != "127.0.0.1" ]; then
     echo "[entrypoint] Checking databases..."
-    # Try creating curve_1
+
+    # Temporarily disable exit-on-error for DB operations
+    set +e
+
+    # Create curve_1
     mysql -h"$DB_HOSTNAME" -P"$DB_HOSTPORT" -u"$DB_USERNAME" -p"$DB_PASSWORD" \
-        -e "CREATE DATABASE IF NOT EXISTS \`${DB_DATABASE}\` CHARACTER SET utf8 COLLATE utf8_general_ci;" 2>&1 && \
-        echo "[entrypoint] Database '${DB_DATABASE}' OK" || \
-        echo "[entrypoint] WARN: Could not create '${DB_DATABASE}' (may need manual creation or already exists)"
-    # Try creating curve_2
+        -e "CREATE DATABASE IF NOT EXISTS \`${DB_DATABASE}\` CHARACTER SET utf8 COLLATE utf8_general_ci;" 2>&1
+    if [ $? -eq 0 ]; then
+        echo "[entrypoint] Database '${DB_DATABASE}' exists/created"
+        # Import curve_1.sql if DB is empty (no tables)
+        TABLE_COUNT=$(mysql -h"$DB_HOSTNAME" -P"$DB_HOSTPORT" -u"$DB_USERNAME" -p"$DB_PASSWORD" \
+            -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${DB_DATABASE}';" 2>/dev/null)
+        if [ "$TABLE_COUNT" = "0" ] && [ -f "/var/www/html/curve_1.sql" ]; then
+            echo "[entrypoint] Importing curve_1.sql..."
+            mysql -h"$DB_HOSTNAME" -P"$DB_HOSTPORT" -u"$DB_USERNAME" -p"$DB_PASSWORD" \
+                "$DB_DATABASE" < /var/www/html/curve_1.sql 2>&1 && \
+                echo "[entrypoint] curve_1.sql imported OK" || \
+                echo "[entrypoint] WARN: curve_1.sql import failed"
+        else
+            echo "[entrypoint] Database '${DB_DATABASE}' has ${TABLE_COUNT} tables, skip import"
+        fi
+    else
+        echo "[entrypoint] WARN: Could not create '${DB_DATABASE}'"
+    fi
+
+    # Create curve_2
     mysql -h"$KLINE_HOST" -P"$KLINE_PORT" -u"$KLINE_USER" -p"$KLINE_PASS" \
-        -e "CREATE DATABASE IF NOT EXISTS \`${KLINE_NAME}\` CHARACTER SET utf8 COLLATE utf8_general_ci;" 2>&1 && \
-        echo "[entrypoint] Database '${KLINE_NAME}' OK" || \
+        -e "CREATE DATABASE IF NOT EXISTS \`${KLINE_NAME}\` CHARACTER SET utf8 COLLATE utf8_general_ci;" 2>&1
+    if [ $? -eq 0 ]; then
+        echo "[entrypoint] Database '${KLINE_NAME}' exists/created"
+        TABLE_COUNT=$(mysql -h"$KLINE_HOST" -P"$KLINE_PORT" -u"$KLINE_USER" -p"$KLINE_PASS" \
+            -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${KLINE_NAME}';" 2>/dev/null)
+        if [ "$TABLE_COUNT" = "0" ] && [ -f "/var/www/html/curve_2.sql" ]; then
+            echo "[entrypoint] Importing curve_2.sql (this may take a while)..."
+            mysql -h"$KLINE_HOST" -P"$KLINE_PORT" -u"$KLINE_USER" -p"$KLINE_PASS" \
+                "$KLINE_NAME" < /var/www/html/curve_2.sql 2>&1 && \
+                echo "[entrypoint] curve_2.sql imported OK" || \
+                echo "[entrypoint] WARN: curve_2.sql import failed"
+        else
+            echo "[entrypoint] Database '${KLINE_NAME}' has ${TABLE_COUNT} tables, skip import"
+        fi
+    else
         echo "[entrypoint] WARN: Could not create '${KLINE_NAME}'"
+    fi
+
+    # Re-enable exit-on-error
+    set -e
 fi
 
 # === Verify PHP works ===
