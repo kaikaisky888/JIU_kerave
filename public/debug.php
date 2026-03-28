@@ -17,24 +17,49 @@ try {
     echo "--- Testing curve_1 DB ---\n";
     $db = $app->db->connect('mysql');
     $tables = $db->getTables();
-    echo "Tables in curve_1: " . count($tables) . "\n";
-    echo implode(', ', $tables) . "\n\n";
-    
-    // Test curve_2
-    echo "--- Testing curve_2 DB ---\n";
+    echo "Tables in curve_1: " . count($tables) . "\n\n";
+
+    // Check critical tables
+    echo "--- Checking critical data ---\n";
     try {
-        $kline = $app->db->connect('kline');
-        $tables2 = $kline->getTables();
-        echo "Tables in curve_2: " . count($tables2) . "\n";
+        $configCount = $db->table('fox_system_config')->count();
+        echo "fox_system_config rows: {$configCount}\n";
     } catch (\Throwable $e) {
-        echo "curve_2 error: " . $e->getMessage() . "\n";
+        echo "fox_system_config error: " . $e->getMessage() . "\n";
     }
     
-    // Test route
-    echo "\n--- Testing HTTP dispatch ---\n";
+    try {
+        $productCount = $db->table('fox_product_lists')->where('status', 1)->count();
+        echo "fox_product_lists (active): {$productCount}\n";
+    } catch (\Throwable $e) {
+        echo "fox_product_lists error: " . $e->getMessage() . "\n";
+    }
+
+    // Simulate homepage request
+    echo "\n--- Simulating homepage ---\n";
+    try {
+        // Test sysconfig function
+        $val = sysconfig('base', 'down_ipa_url');
+        echo "sysconfig(base, down_ipa_url) = " . var_export($val, true) . "\n";
+    } catch (\Throwable $e) {
+        echo "sysconfig error: " . $e->getMessage() . "\n";
+        echo "  at " . $e->getFile() . ":" . $e->getLine() . "\n";
+    }
+
+    // Test actual HTTP dispatch to /
+    echo "\n--- HTTP dispatch to / ---\n";
+    $_SERVER['REQUEST_URI'] = '/';
+    $_SERVER['PATH_INFO'] = '/';
+    $_GET['s'] = '/';
     $http = $app->http;
     $response = $http->run();
     echo "Response status: " . $response->getCode() . "\n";
+    if ($response->getCode() >= 400) {
+        $content = $response->getContent();
+        // Show first 2000 chars of error response
+        echo "Response body (first 2000 chars):\n";
+        echo substr(strip_tags($content), 0, 2000) . "\n";
+    }
     
 } catch (\Throwable $e) {
     echo "ERROR: " . get_class($e) . "\n";
