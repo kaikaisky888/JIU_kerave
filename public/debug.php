@@ -56,9 +56,21 @@ try {
     echo "Response status: " . $response->getCode() . "\n";
     if ($response->getCode() >= 400) {
         $content = $response->getContent();
-        // Show first 2000 chars of error response
-        echo "Response body (first 2000 chars):\n";
-        echo substr(strip_tags($content), 0, 2000) . "\n";
+        // Extract error message from ThinkPHP error page
+        if (preg_match('/<div class="message">(.*?)<\/div>/s', $content, $m)) {
+            echo "Error message: " . trim(strip_tags($m[1])) . "\n";
+        }
+        if (preg_match('/<div class="source-code">(.*?)<\/div>/s', $content, $m)) {
+            echo "Source: " . trim(strip_tags($m[1])) . "\n";
+        }
+        if (preg_match('/<div class="trace">(.*?)<\/div>/s', $content, $m)) {
+            echo "Trace (excerpt): " . substr(trim(strip_tags($m[1])), 0, 1000) . "\n";
+        }
+        // Fallback: show raw HTML without style tags
+        if (!preg_match('/<div class="message">/', $content)) {
+            $noStyle = preg_replace('/<style[^>]*>.*?<\/style>/s', '', $content);
+            echo "Body: " . substr(trim(strip_tags($noStyle)), 0, 3000) . "\n";
+        }
     }
     
 } catch (\Throwable $e) {
