@@ -72,27 +72,28 @@ chmod 600 /var/www/html/.env
 
 # === Inject env vars into PHP-FPM so PHP processes can read them ===
 if [ -f "/usr/local/etc/php-fpm.d/www.conf" ]; then
+    # Quote all values to handle empty strings and special chars
     cat >> /usr/local/etc/php-fpm.d/www.conf <<FPMEOF
 
 ; --- Railway env vars ---
-env[APP_DEBUG] = ${APP_DEBUG}
-env[DATABASE_TYPE] = ${DB_TYPE}
-env[DATABASE_DRIVER] = ${DB_DRIVER}
-env[DATABASE_HOSTNAME] = ${DB_HOSTNAME}
-env[DATABASE_HOSTPORT] = ${DB_HOSTPORT}
-env[DATABASE_DATABASE] = ${DB_DATABASE}
-env[DATABASE_USERNAME] = ${DB_USERNAME}
-env[DATABASE_PASSWORD] = ${DB_PASSWORD}
-env[DATABASE_CHARSET] = ${DB_CHARSET}
-env[DATABASE_PREFIX] = ${DB_PREFIX}
-env[KLINE_DB_HOST] = ${KLINE_HOST}
-env[KLINE_DB_PORT] = ${KLINE_PORT}
-env[KLINE_DB_USER] = ${KLINE_USER}
-env[KLINE_DB_PASS] = ${KLINE_PASS}
-env[KLINE_DB_NAME] = ${KLINE_NAME}
-env[REDIS_HOST] = ${R_HOST}
-env[REDIS_PORT] = ${R_PORT}
-env[REDIS_PASSWORD] = ${R_PASS}
+env[APP_DEBUG] = "${APP_DEBUG}"
+env[DATABASE_TYPE] = "${DB_TYPE}"
+env[DATABASE_DRIVER] = "${DB_DRIVER}"
+env[DATABASE_HOSTNAME] = "${DB_HOSTNAME}"
+env[DATABASE_HOSTPORT] = "${DB_HOSTPORT}"
+env[DATABASE_DATABASE] = "${DB_DATABASE}"
+env[DATABASE_USERNAME] = "${DB_USERNAME}"
+env[DATABASE_PASSWORD] = "${DB_PASSWORD}"
+env[DATABASE_CHARSET] = "${DB_CHARSET}"
+env[DATABASE_PREFIX] = "${DB_PREFIX}"
+env[KLINE_DB_HOST] = "${KLINE_HOST}"
+env[KLINE_DB_PORT] = "${KLINE_PORT}"
+env[KLINE_DB_USER] = "${KLINE_USER}"
+env[KLINE_DB_PASS] = "${KLINE_PASS}"
+env[KLINE_DB_NAME] = "${KLINE_NAME}"
+env[REDIS_HOST] = "${R_HOST}"
+env[REDIS_PORT] = "${R_PORT}"
+env[REDIS_PASSWORD] = "${R_PASS}"
 FPMEOF
 fi
 
@@ -123,45 +124,27 @@ fi
 
 # === Verify PHP works ===
 echo "[entrypoint] Testing PHP..."
-php -r "echo 'PHP ' . PHP_VERSION . ' OK' . PHP_EOL;" || {
-    echo "[entrypoint] FATAL: PHP is broken!"
-    php -m 2>&1 || true
-    exit 1
-}
+php -r "echo 'PHP ' . PHP_VERSION . ' OK' . PHP_EOL;" || { echo "[FATAL] PHP broken!"; exit 1; }
 
-# Verify PHP extensions needed by the app
 php -r "
-\$required = ['pdo_mysql','mysqli','redis','bcmath','pcntl','posix','sockets','gd','zip'];
-\$missing = [];
-foreach (\$required as \$ext) {
-    if (!extension_loaded(\$ext)) \$missing[] = \$ext;
-}
-if (\$missing) {
-    echo 'MISSING extensions: ' . implode(', ', \$missing) . PHP_EOL;
-    exit(1);
-} else {
-    echo 'All required extensions loaded' . PHP_EOL;
-}
-" || {
-    echo "[entrypoint] FATAL: Missing PHP extensions!"
-    exit 1
-}
+\$req = ['pdo_mysql','mysqli','redis','bcmath','pcntl','posix','sockets','gd','zip'];
+\$miss = array_filter(\$req, function(\$e){ return !extension_loaded(\$e); });
+if (\$miss) { echo 'MISSING: ' . implode(', ', \$miss) . PHP_EOL; exit(1); }
+echo 'Extensions OK' . PHP_EOL;
+" || { echo "[FATAL] Missing PHP extensions!"; exit 1; }
 
 # Test PHP-FPM config validity
 php-fpm -t 2>&1 || {
-    echo "[entrypoint] FATAL: PHP-FPM config test failed!"
-    cat /usr/local/etc/php-fpm.d/www.conf
+    echo "[FATAL] PHP-FPM config test failed! Showing injected env lines:"
+    grep "^env\[" /usr/local/etc/php-fpm.d/www.conf 2>/dev/null | head -25
     exit 1
 }
 
-# === Debug output ===
-echo "[entrypoint] ======== Configuration ========"
-echo "[entrypoint] LISTEN_PORT=${LISTEN_PORT}  APP_DEBUG=${APP_DEBUG}"
-echo "[entrypoint] DB: ${DB_USERNAME}@${DB_HOSTNAME}:${DB_HOSTPORT}/${DB_DATABASE}"
-echo "[entrypoint] Kline: ${KLINE_USER}@${KLINE_HOST}:${KLINE_PORT}/${KLINE_NAME}"
-echo "[entrypoint] Redis: ${R_HOST}:${R_PORT}"
-echo "[entrypoint] --- Generated .env ---"
-cat /var/www/html/.env
-echo "[entrypoint] ======== Starting Services ========"
+# === Debug output (minimal to avoid Railway rate limit) ===
+echo "[entrypoint] PORT=${LISTEN_PORT} DEBUG=${APP_DEBUG}"
+echo "[entrypoint] DB=${DB_USERNAME}@${DB_HOSTNAME}:${DB_HOSTPORT}/${DB_DATABASE}"
+echo "[entrypoint] Kline=${KLINE_USER}@${KLINE_HOST}:${KLINE_PORT}/${KLINE_NAME}"
+echo "[entrypoint] Redis=${R_HOST}:${R_PORT}"
+echo "[entrypoint] Starting services..."
 
 exec "$@"
