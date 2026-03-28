@@ -31,6 +31,11 @@ try {
     ]);
     $checks['mysql_connection'] = 'connected';
 
+    // Fix row size issue: set dynamic row format and relaxed mode
+    $pdo->exec("SET GLOBAL innodb_default_row_format = 'DYNAMIC'");
+    $pdo->exec("SET SESSION innodb_strict_mode = 0");
+    $pdo->exec("SET SESSION sql_mode = ''");
+
     // List existing databases
     $stmt = $pdo->query("SHOW DATABASES");
     $checks['databases'] = $stmt->fetchAll(PDO::FETCH_COLUMN);
@@ -49,14 +54,16 @@ try {
         if ($tableCount === 0) {
             $sqlFile = dirname(__DIR__) . '/curve_1.sql';
             if (file_exists($sqlFile)) {
-                $checks['setup']['import_curve_1'] = 'importing...';
+                set_time_limit(600);
                 $pdo->exec("USE `{$db1}`");
+                $pdo->exec("SET NAMES utf8");
                 $sql = file_get_contents($sqlFile);
-                // Split by semicolons (basic), execute one by one
+                // Add ROW_FORMAT=DYNAMIC to all CREATE TABLE statements
+                $sql = preg_replace('/ENGINE\s*=\s*InnoDB/i', 'ENGINE=InnoDB ROW_FORMAT=DYNAMIC', $sql);
                 $pdo->exec($sql);
                 $checks['setup']['import_curve_1'] = 'OK';
             } else {
-                $checks['setup']['import_curve_1'] = 'file not found: ' . $sqlFile;
+                $checks['setup']['import_curve_1'] = 'file not found';
             }
         } else {
             $checks['setup']['import_curve_1'] = "skipped ({$tableCount} tables exist)";
@@ -73,13 +80,14 @@ try {
             $sqlFile = dirname(__DIR__) . '/curve_2.sql';
             if (file_exists($sqlFile)) {
                 set_time_limit(600);
-                $checks['setup']['import_curve_2'] = 'importing (large file)...';
                 $pdo->exec("USE `{$db2}`");
+                $pdo->exec("SET NAMES utf8");
                 $sql = file_get_contents($sqlFile);
+                $sql = preg_replace('/ENGINE\s*=\s*InnoDB/i', 'ENGINE=InnoDB ROW_FORMAT=DYNAMIC', $sql);
                 $pdo->exec($sql);
                 $checks['setup']['import_curve_2'] = 'OK';
             } else {
-                $checks['setup']['import_curve_2'] = 'file not found: ' . $sqlFile;
+                $checks['setup']['import_curve_2'] = 'file not found';
             }
         } else {
             $checks['setup']['import_curve_2'] = "skipped ({$tableCount} tables exist)";
@@ -95,7 +103,9 @@ try {
 
 // Test Redis
 try {
-    $r = new Redis();
+    if (!class_exists('Redis')) throw new Exception('Redis extension not installed');
+    /** @var \Redis $r */
+    $r = new \Redis();
     $rHost = getenv('REDIS_HOST') ?: '127.0.0.1';
     $rPort = (int)(getenv('REDIS_PORT') ?: 6379);
     $rPass = getenv('REDIS_PASSWORD') ?: '';
