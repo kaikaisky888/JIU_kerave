@@ -47,30 +47,28 @@ try {
     }
 
     // Test actual HTTP dispatch to /
-    echo "\n--- HTTP dispatch to / ---\n";
-    $_SERVER['REQUEST_URI'] = '/';
-    $_SERVER['PATH_INFO'] = '/';
-    $_GET['s'] = '/';
-    $http = $app->http;
-    $response = $http->run();
-    echo "Response status: " . $response->getCode() . "\n";
-    if ($response->getCode() >= 400) {
-        $content = $response->getContent();
-        // Extract error message from ThinkPHP error page
-        if (preg_match('/<div class="message">(.*?)<\/div>/s', $content, $m)) {
-            echo "Error message: " . trim(strip_tags($m[1])) . "\n";
+    echo "\n--- Direct controller test ---\n";
+    try {
+        // Set up request context
+        $_SERVER['REQUEST_URI'] = '/';
+        $app->request->setUrl('/');
+        
+        // Directly instantiate and call the index controller
+        $controller = new \app\index\controller\Index($app);
+        $result = $controller->index();
+        echo "Result type: " . gettype($result) . "\n";
+        if (is_string($result)) {
+            echo "Result length: " . strlen($result) . "\n";
+            echo "First 500 chars:\n" . substr($result, 0, 500) . "\n";
+        } elseif ($result instanceof \think\Response) {
+            echo "Response code: " . $result->getCode() . "\n";
         }
-        if (preg_match('/<div class="source-code">(.*?)<\/div>/s', $content, $m)) {
-            echo "Source: " . trim(strip_tags($m[1])) . "\n";
-        }
-        if (preg_match('/<div class="trace">(.*?)<\/div>/s', $content, $m)) {
-            echo "Trace (excerpt): " . substr(trim(strip_tags($m[1])), 0, 1000) . "\n";
-        }
-        // Fallback: show raw HTML without style tags
-        if (!preg_match('/<div class="message">/', $content)) {
-            $noStyle = preg_replace('/<style[^>]*>.*?<\/style>/s', '', $content);
-            echo "Body: " . substr(trim(strip_tags($noStyle)), 0, 3000) . "\n";
-        }
+    } catch (\Throwable $e) {
+        echo "Exception: " . get_class($e) . "\n";
+        echo "Message: " . $e->getMessage() . "\n";
+        echo "Code: " . $e->getCode() . "\n";
+        echo "File: " . $e->getFile() . ":" . $e->getLine() . "\n";
+        echo "Trace:\n" . substr($e->getTraceAsString(), 0, 2000) . "\n";
     }
     
 } catch (\Throwable $e) {
